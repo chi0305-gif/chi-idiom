@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>成語駭客 | Idiom Hacker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --hacker-green: #39FF14;
+            --hacker-dark: #001100;
+            --bg-color: #000000;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--hacker-green);
+            font-family: 'VT323', monospace;
+            overflow: hidden; /* Prevent scroll for full immersion */
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        /* --- CRT Screen Effects --- */
+        .crt-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            pointer-events: none;
+            z-index: 50;
+            background: 
+                /* Scanlines */
+                linear-gradient(
+                    rgba(18, 16, 16, 0) 50%, 
+                    rgba(0, 0, 0, 0.25) 50%
+                ),
+                /* Vignette */
+                radial-gradient(
+                    circle at center, 
+                    rgba(0,0,0,0) 60%, 
+                    rgba(0,0,0,0.4) 100%
+                );
+            background-size: 100% 4px, 100% 100%;
+            animation: scanline 10s linear infinite;
+        }
+
+        @keyframes scanline {
+            0% { background-position: 0 0; }
+            100% { background-position: 0 100%; }
+        }
+
+        /* Screen Flicker */
+        .screen-flicker {
+            animation: flicker 0.15s infinite;
+            opacity: 1;
+        }
+
+        @keyframes flicker {
+            0% { opacity: 0.97; }
+            5% { opacity: 0.95; }
+            10% { opacity: 0.9; }
+            15% { opacity: 0.95; }
+            20% { opacity: 0.99; }
+            50% { opacity: 0.95; }
+            80% { opacity: 0.9; }
+            100% { opacity: 0.97; }
+        }
+
+        /* --- Text Glitch Effect --- */
+        .glitch-text {
+            position: relative;
+        }
+        
+        .glitch-text::before,
+        .glitch-text::after {
+            content: attr(data-text);
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: var(--bg-color);
+        }
+
+        .glitch-text::before {
+            left: 2px;
+            text-shadow: -1px 0 #ff00c1;
+            clip: rect(44px, 450px, 56px, 0);
+            animation: glitch-anim 5s infinite linear alternate-reverse;
+        }
+
+        .glitch-text::after {
+            left: -2px;
+            text-shadow: -1px 0 #00fff9;
+            clip: rect(44px, 450px, 56px, 0);
+            animation: glitch-anim2 5s infinite linear alternate-reverse;
+        }
+
+        @keyframes glitch-anim {
+            0% { clip: rect(14px, 9999px, 12px, 0); }
+            5% { clip: rect(82px, 9999px, 96px, 0); }
+            10% { clip: rect(3px, 9999px, 86px, 0); }
+            15% { clip: rect(24px, 9999px, 3px, 0); }
+            20% { clip: rect(69px, 9999px, 48px, 0); }
+            100% { clip: rect(0, 0, 0, 0); }
+        }
+
+        @keyframes glitch-anim2 {
+            0% { clip: rect(51px, 9999px, 21px, 0); }
+            5% { clip: rect(4px, 9999px, 95px, 0); }
+            10% { clip: rect(74px, 9999px, 3px, 0); }
+            15% { clip: rect(15px, 9999px, 93px, 0); }
+            20% { clip: rect(28px, 9999px, 6px, 0); }
+            100% { clip: rect(0, 0, 0, 0); }
+        }
+
+        /* --- UI Elements --- */
+        .hacker-btn {
+            background-color: transparent;
+            border: 2px solid var(--hacker-green);
+            color: var(--hacker-green);
+            text-transform: uppercase;
+            box-shadow: 0 0 5px var(--hacker-green);
+            transition: all 0.1s ease;
+            cursor: pointer;
+        }
+
+        .hacker-btn:hover:not(:disabled) {
+            background-color: var(--hacker-green);
+            color: black;
+            box-shadow: 0 0 20px var(--hacker-green);
+        }
+
+        .hacker-btn:active:not(:disabled) {
+            transform: scale(0.95);
+        }
+
+        .hacker-btn:disabled {
+            border-color: #1a5c0d;
+            color: #1a5c0d;
+            box-shadow: none;
+            cursor: not-allowed;
+        }
+
+        .hacker-btn.selected {
+            background-color: var(--hacker-green);
+            color: black;
+            box-shadow: 0 0 15px var(--hacker-green);
+        }
+
+        .progress-bar {
+            transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        #matrix-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            opacity: 0.3;
+        }
+
+        .content-layer {
+            position: relative;
+            z-index: 10;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Utility for visibility toggle with transition */
+        .fade-hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+        .fade-visible {
+            opacity: 1;
+            pointer-events: auto;
+        }
+    </style>
+</head>
+<body class="screen-flicker">
+
+    <!-- Background Matrix Rain -->
+    <canvas id="matrix-canvas"></canvas>
+    
+    <!-- CRT Overlay -->
+    <div class="crt-overlay"></div>
+
+    <!-- Main Content -->
+    <div id="app" class="content-layer p-4">
+
+        <!-- SCREEN: START -->
+        <div id="start-screen" class="flex flex-col items-center justify-center h-full space-y-8 absolute inset-0 bg-black/80 z-20">
+            <h1 class="text-6xl md:text-8xl font-bold glitch-text tracking-widest text-center" data-text="成語駭客">成語駭客</h1>
+            <p class="text-xl tracking-wider opacity-80 animate-pulse">SYSTEM READY_</p>
+            <button id="start-btn" class="hacker-btn px-12 py-4 text-3xl font-bold rounded">
+                開始遊戲 [ENTER]
+            </button>
+        </div>
+
+        <!-- SCREEN: GAME -->
+        <div id="game-ui" class="hidden flex-col h-full w-full max-w-6xl mx-auto">
+            
+            <!-- Top: Scoreboard -->
+            <div class="flex justify-between items-center mb-4 border-b border-[#39FF14] pb-2 bg-black/60">
+                <!-- Team 1 -->
+                <div class="w-1/3 text-left">
+                    <div class="text-xl mb-1">TEAM_01 <span id="score-text-1">5</span>/10</div>
+                    <div class="h-4 w-full border border-[#39FF14] p-0.5">
+                        <div id="bar-1" class="h-full bg-[#39FF14] progress-bar w-1/2"></div>
+                    </div>
+                </div>
+
+                <!-- Timer / Phase Info -->
+                <div class="w-1/3 text-center flex flex-col items-center">
+                    <div class="text-sm opacity-70">WAVE <span id="current-q-num">1</span>/10</div>
+                    <div id="timer-box" class="text-4xl font-bold border-2 border-[#39FF14] w-20 h-20 flex items-center justify-center rounded-full mt-1 bg-black shadow-[0_0_10px_#39FF14]">
+                        5
+                    </div>
+                    <div id="phase-text" class="text-xs mt-1 animate-pulse text-[#39FF14]">LOADING...</div>
+                </div>
+
+                <!-- Team 2 -->
+                <div class="w-1/3 text-right">
+                    <div class="text-xl mb-1">TEAM_02 <span id="score-text-2">5</span>/10</div>
+                    <div class="h-4 w-full border border-[#39FF14] p-0.5 flex justify-end">
+                        <div id="bar-2" class="h-full bg-[#39FF14] progress-bar w-1/2"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Middle: Question Area -->
+            <div class="flex-grow flex flex-col justify-center items-center relative">
+                <!-- Question Text -->
+                <div id="question-box" class="w-full text-center mb-6 p-6 border border-[#39FF14] bg-black/70 shadow-[0_0_15px_rgba(57,255,20,0.3)] min-h-[120px] flex items-center justify-center">
+                    <h2 id="question-text" class="text-2xl md:text-4xl leading-relaxed">INITIALIZING...</h2>
+                </div>
+
+                <!-- Options Area (Hidden in Phase 1) -->
+                <div id="options-container" class="grid grid-cols-1 md:grid-cols-2 gap-4 w-full opacity-0 transition-opacity duration-300">
+                    <div class="option-display p-3 border border-[#39FF14] border-dashed text-xl"><span class="font-bold">A:</span> <span id="opt-text-a">...</span></div>
+                    <div class="option-display p-3 border border-[#39FF14] border-dashed text-xl"><span class="font-bold">B:</span> <span id="opt-text-b">...</span></div>
+                    <div class="option-display p-3 border border-[#39FF14] border-dashed text-xl"><span class="font-bold">C:</span> <span id="opt-text-c">...</span></div>
+                    <div class="option-display p-3 border border-[#39FF14] border-dashed text-xl"><span class="font-bold">D:</span> <span id="opt-text-d">...</span></div>
+                </div>
+
+                <!-- Round Result Overlay -->
+                <div id="round-result" class="absolute inset-0 bg-black/90 z-30 flex flex-col items-center justify-center hidden">
+                    <h3 class="text-4xl mb-4 glitch-text" data-text="ROUND OVER">ROUND OVER</h3>
+                    <div id="round-detail" class="text-2xl text-center space-y-2">
+                        <!-- JS populates this -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bottom: Controls -->
+            <div class="mt-4 grid grid-cols-2 gap-8 h-1/4 max-h-[200px]">
+                
+                <!-- Team 1 Controls -->
+                <div class="border-t-2 border-l-2 border-[#39FF14] p-2 relative rounded-tl-xl bg-black/40">
+                    <div class="absolute -top-3 left-2 bg-black px-2 text-sm text-[#39FF14]">TEAM_01</div>
+                    <div class="grid grid-cols-2 gap-2 h-full">
+                        <button class="hacker-btn text-2xl font-bold t1-btn" data-opt="A">A</button>
+                        <button class="hacker-btn text-2xl font-bold t1-btn" data-opt="B">B</button>
+                        <button class="hacker-btn text-2xl font-bold t1-btn" data-opt="C">C</button>
+                        <button class="hacker-btn text-2xl font-bold t1-btn" data-opt="D">D</button>
+                    </div>
+                </div>
+
+                <!-- Team 2 Controls -->
+                <div class="border-t-2 border-r-2 border-[#39FF14] p-2 relative rounded-tr-xl bg-black/40">
+                    <div class="absolute -top-3 right-2 bg-black px-2 text-sm text-[#39FF14]">TEAM_02</div>
+                    <div class="grid grid-cols-2 gap-2 h-full">
+                        <button class="hacker-btn text-2xl font-bold t2-btn" data-opt="A">A</button>
+                        <button class="hacker-btn text-2xl font-bold t2-btn" data-opt="B">B</button>
+                        <button class="hacker-btn text-2xl font-bold t2-btn" data-opt="C">C</button>
+                        <button class="hacker-btn text-2xl font-bold t2-btn" data-opt="D">D</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SCREEN: END -->
+        <div id="end-screen" class="hidden flex-col items-center justify-center h-full absolute inset-0 bg-black/90 z-40">
+            <h1 class="text-6xl mb-8 glitch-text" data-text="GAME OVER">GAME OVER</h1>
+            <div class="text-3xl mb-4">WINNER DETECTED:</div>
+            <div id="winner-display" class="text-5xl font-bold text-[#39FF14] border-4 border-[#39FF14] p-6 mb-8 shadow-[0_0_30px_#39FF14] transform rotate-1">
+                TEAM_XX
+            </div>
+            <div class="flex gap-4">
+                <div class="text-xl">T1: <span id="final-s1">0</span></div>
+                <div class="text-xl">T2: <span id="final-s2">0</span></div>
+            </div>
+            <button id="restart-btn" class="mt-12 hacker-btn px-8 py-3 text-2xl">
+                REBOOT SYSTEM
+            </button>
+        </div>
+
+    </div>
+
+    <!-- Game Logic -->
+    <script>
+        /**
+         * Matrix Rain Effect
+         */
+        const canvas = document.getElementById('matrix-canvas');
+        const ctx = canvas.getContext('2d');
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        const chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ天地玄黃宇宙洪荒日月盈昃辰宿列張寒來暑往秋收冬藏龍師火帝鳥官人皇';
+        const fontSize = 16;
+        let columns = Math.floor(canvas.width / fontSize);
+        let drops = [];
+
+        function initMatrix() {
+            columns = Math.floor(canvas.width / fontSize);
+            drops = [];
+            for (let i = 0; i < columns; i++) {
+                drops[i] = Math.random() * -100; // Start at different heights above
+            }
+        }
+        initMatrix();
+
+        function drawMatrix() {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.fillStyle = '#0F0';
+            ctx.font = fontSize + 'px monospace';
+
+            for (let i = 0; i < drops.length; i++) {
+                const text = chars.charAt(Math.floor(Math.random() * chars.length));
+                ctx.fillText(text, i * fontSize, drops[i] * fontSize);
+
+                if (drops[i] * fontSize > canvas.height && Math.random() > 0.975) {
+                    drops[i] = 0;
+                }
+                drops[i]++;
+            }
+        }
+        setInterval(drawMatrix, 33);
+
+
+        /**
+         * Game Data (Idiom Questions)
+         */
+        const questions = [
+            { q: "「一字千金」這個成語最初是跟哪位歷史人物的作品有關？", options: {A: "孔子", B: "呂不韋", C: "李白", D: "曹操"}, ans: "B" },
+            { q: "成語「指鹿為馬」中，是誰在混淆視聽？", options: {A: "秦始皇", B: "項羽", C: "趙高", D: "劉邦"}, ans: "C" },
+            { q: "形容人書讀得很多，學問淵博，可以用哪個成語？", options: {A: "學富五車", B: "胸無點墨", C: "井底之蛙", D: "目不識丁"}, ans: "A" },
+            { q: "「畫蛇添足」是多此一舉，那「畫龍點睛」的意思是？", options: {A: "畫圖很貴", B: "關鍵一筆", C: "破壞畫面", D: "眼睛很痛"}, ans: "B" },
+            { q: "填空題：狐假＿威 (狐狸借著誰的威風嚇跑百獸？)", options: {A: "獅", B: "龍", C: "虎", D: "狼"}, ans: "C" },
+            { q: "「臥薪嘗膽」的主角是為了復國雪恥，他是誰？", options: {A: "勾踐", B: "夫差", C: "孫權", D: "伍子胥"}, ans: "A" },
+            { q: "下列哪個成語形容「情勢非常危險」？", options: {A: "風平浪靜", B: "千鈞一髮", C: "安如泰山", D: "穩如泰山"}, ans: "B" },
+            { q: "「東施效顰」的「顰」字是指什麼動作？", options: {A: "微笑", B: "大笑", C: "皺眉", D: "點頭"}, ans: "C" },
+            { q: "形容「做事半途而廢，不能堅持到底」的成語是？", options: {A: "持之以恆", B: "堅持不懈", C: "一暴十寒", D: "貫徹始終"}, ans: "C" },
+            { q: "「三人成虎」這個成語告訴我們什麼道理？", options: {A: "老虎很可怕", B: "團結力量大", C: "謠言可怕", D: "人多好辦事"}, ans: "C" }
+        ];
+
+        /**
+         * Game State
+         */
+        let state = {
+            currentQIndex: 0,
+            scores: { t1: 5, t2: 5 },
+            answers: { t1: null, t2: null }, // { val: 'A', time: 123456789 }
+            timer: null,
+            timeLeft: 0,
+            phase: 'start' // start, reading, answering, result, end
+        };
+
+        const SELECTORS = {
+            startScreen: document.getElementById('start-screen'),
+            gameUI: document.getElementById('game-ui'),
+            endScreen: document.getElementById('end-screen'),
+            qText: document.getElementById('question-text'),
+            optContainer: document.getElementById('options-container'),
+            timerBox: document.getElementById('timer-box'),
+            phaseText: document.getElementById('phase-text'),
+            score1: document.getElementById('score-text-1'),
+            score2: document.getElementById('score-text-2'),
+            bar1: document.getElementById('bar-1'),
+            bar2: document.getElementById('bar-2'),
+            qNum: document.getElementById('current-q-num'),
+            roundResult: document.getElementById('round-result'),
+            roundDetail: document.getElementById('round-detail'),
+            t1Btns: document.querySelectorAll('.t1-btn'),
+            t2Btns: document.querySelectorAll('.t2-btn'),
+            startBtn: document.getElementById('start-btn'),
+            restartBtn: document.getElementById('restart-btn'),
+            finalS1: document.getElementById('final-s1'),
+            finalS2: document.getElementById('final-s2'),
+            winnerDisplay: document.getElementById('winner-display')
+        };
+
+        // Initialize Audio Context (Browser policy requires interaction first, we will init on Start)
+        // Since prompt requested NO external files, we skip real audio and rely on visual feedback.
+
+        /**
+         * Core Logic
+         */
+        
+        function updateScoresUI() {
+            // Clamp 0-10
+            state.scores.t1 = Math.max(0, Math.min(10, state.scores.t1));
+            state.scores.t2 = Math.max(0, Math.min(10, state.scores.t2));
+
+            SELECTORS.score1.innerText = state.scores.t1;
+            SELECTORS.score2.innerText = state.scores.t2;
+
+            // Update Bars
+            SELECTORS.bar1.style.width = `${state.scores.t1 * 10}%`;
+            SELECTORS.bar2.style.width = `${state.scores.t2 * 10}%`;
+
+            // Color change for danger
+            SELECTORS.bar1.className = `h-full progress-bar transition-all duration-500 ${state.scores.t1 < 3 ? 'bg-red-500 shadow-[0_0_10px_red]' : 'bg-[#39FF14]'}`;
+            SELECTORS.bar2.className = `h-full progress-bar transition-all duration-500 ${state.scores.t2 < 3 ? 'bg-red-500 shadow-[0_0_10px_red]' : 'bg-[#39FF14]'}`;
+        }
+
+        function setPhase(phaseName) {
+            state.phase = phaseName;
+            if(phaseName === 'reading') {
+                SELECTORS.phaseText.innerText = "ACCESSING DATA...";
+                SELECTORS.phaseText.className = "text-xs mt-1 text-yellow-400 animate-pulse";
+                SELECTORS.timerBox.className = "text-4xl font-bold border-2 border-yellow-400 text-yellow-400 w-20 h-20 flex items-center justify-center rounded-full mt-1 bg-black";
+            } else if (phaseName === 'answering') {
+                SELECTORS.phaseText.innerText = "DECRYPT NOW!";
+                SELECTORS.phaseText.className = "text-xs mt-1 text-red-500 animate-bounce";
+                SELECTORS.timerBox.className = "text-4xl font-bold border-2 border-red-500 text-red-500 w-20 h-20 flex items-center justify-center rounded-full mt-1 bg-black shadow-[0_0_15px_red]";
+            }
+        }
+
+        function loadQuestion() {
+            const q = questions[state.currentQIndex];
+            SELECTORS.qNum.innerText = state.currentQIndex + 1;
+            
+            // Phase 1: Reading
+            setPhase('reading');
+            SELECTORS.qText.innerHTML = `<span class="glitch-text" data-text="${q.q}">${q.q}</span>`;
+            
+            // Hide Options, Reset Buttons
+            SELECTORS.optContainer.style.opacity = "0";
+            resetButtons();
+            
+            // Timer 5s
+            startTimer(5, () => {
+                startAnsweringPhase();
+            });
+        }
+
+        function startAnsweringPhase() {
+            setPhase('answering');
+            const q = questions[state.currentQIndex];
+            
+            // Show Options
+            document.getElementById('opt-text-a').innerText = q.options.A;
+            document.getElementById('opt-text-b').innerText = q.options.B;
+            document.getElementById('opt-text-c').innerText = q.options.C;
+            document.getElementById('opt-text-d').innerText = q.options.D;
+            
+            SELECTORS.optContainer.style.opacity = "1";
+            
+            // Enable Buttons
+            enableButtons(true);
+
+            // Timer 7s
+            startTimer(7, () => {
+                endRound(true); // true = time out
+            });
+        }
+
+        function startTimer(seconds, callback) {
+            clearInterval(state.timer);
+            state.timeLeft = seconds;
+            SELECTORS.timerBox.innerText = state.timeLeft;
+
+            state.timer = setInterval(() => {
+                state.timeLeft--;
+                SELECTORS.timerBox.innerText = state.timeLeft;
+                if (state.timeLeft <= 0) {
+                    clearInterval(state.timer);
+                    callback();
+                }
+            }, 1000);
+        }
+
+        function handleInput(team, choice) {
+            if (state.phase !== 'answering') return;
+            if (state.answers[team]) return; // Already answered
+
+            // Record Answer
+            state.answers[team] = {
+                val: choice,
+                time: Date.now()
+            };
+
+            // Visual Feedback
+            const btn = document.querySelector(`.${team}-btn[data-opt="${choice}"]`);
+            btn.classList.add('selected');
+            
+            // Disable this team's buttons
+            disableTeamButtons(team);
+
+            // Check if both answered
+            if (state.answers.t1 && state.answers.t2) {
+                clearInterval(state.timer);
+                setTimeout(() => endRound(false), 500); // Slight delay for visual impact
+            }
+        }
+
+        function endRound(isTimeout) {
+            setPhase('result');
+            disableButtonsGlobal();
+            
+            const q = questions[state.currentQIndex];
+            const correct = q.ans;
+            const a1 = state.answers.t1;
+            const a2 = state.answers.t2;
+            
+            let msg1 = "NO DATA";
+            let msg2 = "NO DATA";
+            let delta1 = 0;
+            let delta2 = 0;
+
+            // Logic Implementation
+            
+            // 1. Check for No Answer
+            if (!a1) { delta1 = -1; msg1 = "TIMEOUT (-1)"; }
+            if (!a2) { delta2 = -1; msg2 = "TIMEOUT (-1)"; }
+
+            // 2. Compare if both present
+            if (a1 && a2) {
+                const t1First = a1.time < a2.time;
+                
+                if (t1First) {
+                    // T1 is First
+                    if (a1.val === correct) {
+                        delta1 = 1; msg1 = "FASTEST (+1)";
+                        delta2 = 0; msg2 = "TOO SLOW (0)";
+                    } else {
+                        delta1 = -1; msg1 = "WRONG (-1)";
+                        // Check T2
+                        if (a2.val === correct) {
+                            delta2 = 1; msg2 = "CORRECT (+1)";
+                        } else {
+                            delta2 = -1; msg2 = "WRONG (-1)";
+                        }
+                    }
+                } else {
+                    // T2 is First
+                    if (a2.val === correct) {
+                        delta2 = 1; msg2 = "FASTEST (+1)";
+                        delta1 = 0; msg1 = "TOO SLOW (0)";
+                    } else {
+                        delta2 = -1; msg2 = "WRONG (-1)";
+                        // Check T1
+                        if (a1.val === correct) {
+                            delta1 = 1; msg1 = "CORRECT (+1)";
+                        } else {
+                            delta1 = -1; msg1 = "WRONG (-1)";
+                        }
+                    }
+                }
+            } 
+            // 3. Handle Single Answer cases (e.g. one clicked, then timeout happened? Unlikely with logic above, but safety check)
+            else if (a1 && !a2) {
+                // T1 answered, T2 timed out (handled in step 1)
+                if (a1.val === correct) { delta1 = 1; msg1 = "CORRECT (+1)"; }
+                else { delta1 = -1; msg1 = "WRONG (-1)"; }
+            }
+            else if (!a1 && a2) {
+                if (a2.val === correct) { delta2 = 1; msg2 = "CORRECT (+1)"; }
+                else { delta2 = -1; msg2 = "WRONG (-1)"; }
+            }
+
+            // Apply Scores
+            state.scores.t1 += delta1;
+            state.scores.t2 += delta2;
+            updateScoresUI();
+
+            // Show Overlay
+            const color1 = delta1 > 0 ? 'text-[#39FF14]' : (delta1 < 0 ? 'text-red-500' : 'text-gray-400');
+            const color2 = delta2 > 0 ? 'text-[#39FF14]' : (delta2 < 0 ? 'text-red-500' : 'text-gray-400');
+
+            SELECTORS.roundDetail.innerHTML = `
+                <div class="mb-4 text-white">ANS: <span class="text-[#39FF14] font-bold text-4xl">${correct}</span></div>
+                <div class="flex justify-between w-[300px] border-t border-gray-600 pt-4">
+                    <div class="text-left">
+                        <div class="text-sm text-gray-400">TEAM_01</div>
+                        <div class="${color1}">${msg1}</div>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-sm text-gray-400">TEAM_02</div>
+                        <div class="${color2}">${msg2}</div>
+                    </div>
+                </div>
+            `;
+            
+            SELECTORS.roundResult.classList.remove('hidden');
+
+            // Next Question Delay
+            setTimeout(() => {
+                SELECTORS.roundResult.classList.add('hidden');
+                nextQuestion();
+            }, 3000);
+        }
+
+        function nextQuestion() {
+            // Clear round data
+            state.answers = { t1: null, t2: null };
+            state.currentQIndex++;
+
+            if (state.currentQIndex >= questions.length) {
+                gameOver();
+            } else {
+                loadQuestion();
+            }
+        }
+
+        function gameOver() {
+            setPhase('end');
+            SELECTORS.gameUI.classList.add('hidden');
+            SELECTORS.endScreen.classList.remove('hidden');
+            SELECTORS.endScreen.classList.add('flex');
+
+            SELECTORS.finalS1.innerText = state.scores.t1;
+            SELECTORS.finalS2.innerText = state.scores.t2;
+
+            if (state.scores.t1 > state.scores.t2) {
+                SELECTORS.winnerDisplay.innerText = "TEAM_01 WINS";
+                SELECTORS.winnerDisplay.style.color = "#39FF14";
+                SELECTORS.winnerDisplay.style.borderColor = "#39FF14";
+            } else if (state.scores.t2 > state.scores.t1) {
+                SELECTORS.winnerDisplay.innerText = "TEAM_02 WINS";
+                SELECTORS.winnerDisplay.style.color = "#39FF14";
+                SELECTORS.winnerDisplay.style.borderColor = "#39FF14";
+            } else {
+                SELECTORS.winnerDisplay.innerText = "DRAW / 平手";
+                SELECTORS.winnerDisplay.style.color = "white";
+                SELECTORS.winnerDisplay.style.borderColor = "white";
+            }
+        }
+
+        function resetGame() {
+            state.currentQIndex = 0;
+            state.scores = { t1: 5, t2: 5 };
+            state.answers = { t1: null, t2: null };
+            updateScoresUI();
+            
+            SELECTORS.endScreen.classList.add('hidden');
+            SELECTORS.endScreen.classList.remove('flex');
+            
+            SELECTORS.startScreen.classList.add('hidden'); // Ensure start is hidden
+            SELECTORS.gameUI.classList.remove('hidden');
+            SELECTORS.gameUI.classList.add('flex');
+            
+            loadQuestion();
+        }
+
+        /**
+         * Button Handling
+         */
+        function resetButtons() {
+            document.querySelectorAll('.hacker-btn').forEach(btn => {
+                btn.classList.remove('selected');
+                btn.disabled = true;
+            });
+            // Re-enable Start/Restart buttons though, logic handled by screen visibility
+        }
+
+        function enableButtons(enable) {
+            SELECTORS.t1Btns.forEach(btn => btn.disabled = !enable);
+            SELECTORS.t2Btns.forEach(btn => btn.disabled = !enable);
+        }
+
+        function disableTeamButtons(team) {
+            if (team === 't1') SELECTORS.t1Btns.forEach(btn => btn.disabled = true);
+            if (team === 't2') SELECTORS.t2Btns.forEach(btn => btn.disabled = true);
+        }
+
+        function disableButtonsGlobal() {
+            SELECTORS.t1Btns.forEach(btn => btn.disabled = true);
+            SELECTORS.t2Btns.forEach(btn => btn.disabled = true);
+        }
+
+        /**
+         * Event Listeners
+         */
+        
+        // Start Game
+        SELECTORS.startBtn.addEventListener('click', () => {
+            SELECTORS.startScreen.classList.add('hidden');
+            SELECTORS.gameUI.classList.remove('hidden');
+            SELECTORS.gameUI.classList.add('flex');
+            updateScoresUI();
+            loadQuestion();
+        });
+
+        // Restart Game
+        SELECTORS.restartBtn.addEventListener('click', resetGame);
+
+        // Controls
+        SELECTORS.t1Btns.forEach(btn => {
+            btn.addEventListener('click', (e) => handleInput('t1', e.target.dataset.opt));
+        });
+
+        SELECTORS.t2Btns.forEach(btn => {
+            btn.addEventListener('click', (e) => handleInput('t2', e.target.dataset.opt));
+        });
+
+        // Keyboard Support (Optional but cool)
+        document.addEventListener('keydown', (e) => {
+            if (state.phase !== 'answering') return;
+            const key = e.key.toLowerCase();
+            
+            // Team 1: 1, 2, 3, 4
+            if (key === '1') handleInput('t1', 'A');
+            if (key === '2') handleInput('t1', 'B');
+            if (key === '3') handleInput('t1', 'C');
+            if (key === '4') handleInput('t1', 'D');
+
+            // Team 2: 7, 8, 9, 0 (or u, i, o, p) - Mapping for demo
+            // Using standard keypad or right side keys often tricky in browser without focus, 
+            // stick to clicks for reliability on mobile/tablet.
+        });
+
+    </script>
+</body>
+</html>
